@@ -402,8 +402,6 @@ async def solve(session):
       ] += f"\n[{int(session.time_left() // 60)} minutes left]"
 
 
-if __name__ == "__main__":
-  taskbridge.run(solve)
 
 
 # =============================================================================
@@ -463,3 +461,6 @@ async def run_tool(*args, **kwargs):
         # Preserve the official loop's string-only tool result contract.
         return json.dumps(error, ensure_ascii=False)
 
+
+if __name__ == "__main__":
+  taskbridge.run(solve)
