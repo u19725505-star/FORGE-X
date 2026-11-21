@@ -226,6 +226,72 @@ jobs:
           print("PASS: final answer preserved unresolved signoff status")
           PY
 
+      - name: Cross-discipline engineering regression suite
+        shell: bash
+        env:
+          PYTHONPATH: submission
+          FORGE_X_STATE_DIR: /tmp/forge-x-regression-state
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import forge_x_runtime as runtime
+          import forge_x_agent as agent
+
+          cases = [
+              ({"discipline":"structural","method":"axial_stress","inputs":{"force":1000,"area":0.01}}, 100000.0),
+              ({"discipline":"civil","method":"flow_rate","inputs":{"volume":0.6,"time":2}}, 0.3),
+              ({"discipline":"electrical","method":"ohms_law","inputs":{"voltage":12,"resistance":4}}, 3.0),
+              ({"discipline":"mechanical","method":"kinetic_energy","inputs":{"mass":2,"velocity":3}}, 9.0),
+          ]
+          for payload, expected in cases:
+              result = runtime.calculate_and_verify(payload)
+              assert abs(result["result"] - expected) < 1e-12, result
+              assert result["verification_status"] == "NUMERICALLY_CONSISTENT", result
+              assert result["engineering_status"] == "UNRESOLVED", result
+              assert result["engineering_signoff"] is False, result
+
+          invalid = [
+              {"discipline":"structural","method":"axial_stress","inputs":{"force":1,"area":0}},
+              {"discipline":"civil","method":"flow_rate","inputs":{"volume":1,"time":0}},
+              {"discipline":"electrical","method":"ohms_law","inputs":{"voltage":1,"resistance":0}},
+              {"discipline":"mechanical","method":"kinetic_energy","inputs":{"mass":-1,"velocity":2}},
+              {"discipline":"mechanical","method":"kinetic_energy","inputs":{"mass":True,"velocity":2}},
+              {"discipline":"structural","method":"kinetic_energy","inputs":{"mass":1,"velocity":2}},
+              {"discipline":"mechanical","method":"not_a_method","inputs":{}},
+          ]
+          for payload in invalid:
+              try:
+                  runtime.calculate_and_verify(payload)
+              except (ValueError, TypeError, KeyError):
+                  continue
+              raise AssertionError(f"Invalid input unexpectedly accepted: {payload}")
+
+          agent_cases = [
+              ("structural","axial_stress",{"force":1000,"area":0.01},100000.0),
+              ("civil","rectangular_area",{"length":10,"width":4},40.0),
+              ("electrical","electrical_power",{"voltage":12,"current":2},24.0),
+              ("mechanical","newtons_second_law",{"mass":5,"acceleration":3},15.0),
+          ]
+          for discipline, method, inputs, expected in agent_cases:
+              calculation = agent.calculate(discipline, method, inputs)
+              assert abs(calculation["result"] - expected) < 1e-12, calculation
+              verification = agent.independently_verify(calculation)
+              assert verification["status"] == "PASS", verification
+
+          event_file = Path("/tmp/forge-x-regression-state/events.jsonl")
+          records = [json.loads(line) for line in event_file.read_text().splitlines() if line.strip()]
+          kinds = {record.get("event_type") for record in records}
+          assert "ENGINEERING_CALCULATION" in kinds, kinds
+          assert "CALCULATION_VERIFICATION" in kinds, kinds
+          print("PASS: exposed tool covers structural, civil, electrical, mechanical calculations")
+          print("PASS: independent numerical checks and unresolved signoff safeguards")
+          print("PASS: invalid, unsafe, mismatched, and unsupported inputs rejected")
+          print("PASS: agent registry independently recomputed one case per discipline")
+          print("PASS: calculation and verification audit events persisted")
+          PY
+
       - name: Validate submission with official PLE kit
         shell: bash
         working-directory: official-ple
