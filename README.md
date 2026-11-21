@@ -57,13 +57,35 @@ The trial checks a nominal axial-stress case and a sensitivity case. Its referen
 
 **Important:** this is an internal demonstration brief, not an official PLE benchmark task and not evidence that a live model run has occurred. GitHub Actions currently validates the submission, deterministic engineering methods, and an offline task-loop simulation. A real model-driven run must be performed through the PLE evaluation environment or another properly configured model endpoint.
 
-## Official live-evaluation path
+## Official PLE evaluation path
 
-PLE's competition workflow uses the official kit to check the harness, run the 29 public development tasks, and generate evaluator-produced `artifacts/`. Entries are submitted through the PLE Kaggle competition. The evaluator supplies credentials for the declared Google-sponsored model; local runs of those models require a Google Cloud model-proxy setup.
+PLE has two distinct evaluation workflows; do not confuse them:
 
-Do not hand-create or edit the official `artifacts/` directory. Generate it with the official PLE evaluation runner, then validate and commit it with the exact harness revision that produced it.
+### Local public development-set evaluation
+
+- The official runner evaluates 29 public tasks and writes evaluator-produced files into `submission/artifacts/`.
+- The task dataset is gated on Hugging Face. The operator must request dataset access and provide an `HF_TOKEN` with read permission.
+- A local run requires Docker, `uv`, Harbor 0.20.0 with `websockets`, sufficient disk/CPU/RAM, the dataset access above, a model endpoint, and a judge endpoint for rubric-graded tasks.
+- For a `google-cloud/<model>` entry, the official local workflow uses `kit/model_proxy`; Google Cloud project authentication and billing may apply. Do not assume this is zero-cost.
+- Start with one selected public task using `uv run python eval/run.py ../submission --tasks <task-id> --trials 1`; expand only after the first run is measured and its artifacts are reviewed.
+- Never hand-create or edit `submission/artifacts/`. Generate artifacts with the official runner and validate them with `uv run python -m kit artifacts ../submission`.
+
+### Hosted competition evaluation
+
+- Competition entries are submitted through Kaggle.
+- The hosted evaluator supplies credentials for the declared Google-sponsored model; entries must use an allowed `google-cloud/<model>` identifier and must not contain personal model API keys.
+- The competition page lists 56 hidden test tasks, with a six-hour limit per task.
+- Hosted evaluation and local public development-set evaluation are separate workflows. A successful CI build is not a benchmark score.
+
+### Current FORGE-X evidence
+
+- GitHub Actions validates Python syntax, deterministic tool behavior, the offline task-loop simulation, cross-discipline regression cases, and official kit submission validation/build.
+- The current workflow does **not** run `eval/run.py`, does not create official PLE task artifacts, and does not establish live-model task performance.
+- The structural axial-member trial under `submission/demo/structural_axial_member/` is an internal synthetic demonstration, not one of the official 29 tasks.
 
 Official guide: https://ple-bench.com/competition/guide
 
-Competition page: https://www.kaggle.com/competitions/physical-engineerings-last-exam
+Official dev-set evaluation instructions: https://github.com/google-research/ple/blob/main/eval/README.md
+
+Competition page: https://ple-bench.com/competition
 
