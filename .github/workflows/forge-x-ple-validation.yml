@@ -1,0 +1,130 @@
+name: FORGE-X PLE Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forge-x-ple-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  official-ple-validation:
+    name: Docker-capable PLE validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out FORGE-X repository
+        uses: actions/checkout@v4
+
+      - name: Check out pinned official PLE repository
+        uses: actions/checkout@v4
+        with:
+          repository: google-research/ple
+          ref: 8320f0402fdca9f42476607f72bcfd5271cd50c9
+          path: official-ple
+          persist-credentials: false
+
+      - name: Verify official PLE commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="8320f0402fdca9f42476607f72bcfd5271cd50c9"
+          ACTUAL="$(git -C official-ple rev-parse HEAD)"
+          echo "Expected: ${EXPECTED}"
+          echo "Actual:   ${ACTUAL}"
+          test "${ACTUAL}" = "${EXPECTED}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Verify Docker availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version
+          docker info
+
+      - name: Install official PLE dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f official-ple/uv.lock ]; then
+            uv sync --project official-ple --frozen
+          elif [ -f official-ple/pyproject.toml ]; then
+            uv sync --project official-ple
+          else
+            echo "Official PLE project metadata was not found."
+            exit 1
+          fi
+
+      - name: Verify submission files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f submission/submission.yaml
+          test -f submission/serve.py
+          test -f submission/forge_x_runtime.py
+          test -f submission/forge_x_agent.py
+          python -m compileall -q submission
+
+      - name: Run official PLE kit check
+        shell: bash
+        working-directory: submission
+        run: |
+          set -euo pipefail
+          uv run --project ../official-ple python -m kit check
+
+      - name: Run official artifact validation when artifacts exist
+        shell: bash
+        working-directory: submission
+        run: |
+          set -euo pipefail
+          if [ -d artifacts ] && [ -n "$(find artifacts -type f -print -quit)" ]; then
+            uv run --project ../official-ple python -m kit artifacts
+          else
+            echo "SKIPPED: No generated artifacts directory is available."
+            echo "Artifact validation requires actual evaluator-produced artifacts."
+          fi
+
+      - name: Record validation summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## FORGE-X PLE CI"
+            echo ""
+            echo "- Official PLE commit: \`8320f0402fdca9f42476607f72bcfd5271cd50c9\`"
+            echo "- Runner: \`ubuntu-latest\`"
+            echo "- Docker availability: checked"
+            echo "- Submission: \`submission/\`"
+            echo "- Model credentials: not embedded or assumed"
+            echo ""
+            echo "A passing package check does not establish PLE task performance."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload CI logs and submission
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-x-ple-ci-${{ github.run_id }}
+          path: |
+            submission/
+            official-ple/kit/
+          if-no-files-found: warn
+          retention-days: 14
