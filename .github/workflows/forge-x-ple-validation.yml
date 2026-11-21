@@ -73,7 +73,7 @@ jobs:
             exit 1
           fi
 
-      - name: Verify submission files
+      - name: Verify submission files and Python syntax
         shell: bash
         run: |
           set -euo pipefail
@@ -83,22 +83,29 @@ jobs:
           test -f submission/forge_x_agent.py
           python -m compileall -q submission
 
-      - name: Run official PLE kit check
+      - name: Validate submission with official PLE kit
         shell: bash
-        working-directory: submission
+        working-directory: official-ple
         run: |
           set -euo pipefail
-          uv run --project ../official-ple python -m kit check
+          uv run --project . python -m kit validate ../submission
 
-      - name: Run official artifact validation when artifacts exist
+      - name: Build submission with official PLE kit
         shell: bash
-        working-directory: submission
+        working-directory: official-ple
         run: |
           set -euo pipefail
-          if [ -d artifacts ] && [ -n "$(find artifacts -type f -print -quit)" ]; then
-            uv run --project ../official-ple python -m kit artifacts
+          uv run --project . python -m kit build ../submission
+
+      - name: Validate official artifacts when present
+        shell: bash
+        working-directory: official-ple
+        run: |
+          set -euo pipefail
+          if [ -d ../submission/artifacts ] && [ -n "$(find ../submission/artifacts -type f -print -quit)" ]; then
+            uv run --project . python -m kit artifacts ../submission
           else
-            echo "SKIPPED: No generated artifacts directory is available."
+            echo "SKIPPED: No evaluator-produced artifacts directory is available."
             echo "Artifact validation requires actual evaluator-produced artifacts."
           fi
 
@@ -109,13 +116,15 @@ jobs:
           {
             echo "## FORGE-X PLE CI"
             echo ""
-            echo "- Official PLE commit: \`8320f0402fdca9f42476607f72bcfd5271cd50c9\`"
-            echo "- Runner: \`ubuntu-latest\`"
+            echo "- Official PLE commit: `8320f0402fdca9f42476607f72bcfd5271cd50c9`"
+            echo "- Runner: `ubuntu-latest`"
             echo "- Docker availability: checked"
-            echo "- Submission: \`submission/\`"
-            echo "- Model credentials: not embedded or assumed"
+            echo "- Official kit submission validation: attempted"
+            echo "- Official kit build: attempted"
+            echo "- Full `kit check` model/smoke/MCP run: not claimed; requires configured model-proxy credentials"
+            echo "- Submission: `submission/`"
             echo ""
-            echo "A passing package check does not establish PLE task performance."
+            echo "Passing validation/build does not establish hidden-task performance or leaderboard readiness."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload CI logs and submission
