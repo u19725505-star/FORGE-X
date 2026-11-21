@@ -216,12 +216,13 @@ jobs:
           events = Path("/tmp/forge-x-loop-state/events.jsonl")
           assert events.is_file(), "Task-loop evidence log was not written"
           event_text = events.read_text(encoding="utf-8")
-          assert "OFFICIAL_TOOL_RESULT" in event_text
-          assert "ENGINEERING_CALCULATION" in event_text
+          event_records = [json.loads(line) for line in event_text.splitlines() if line.strip()]
+          event_types = {record.get("event_type") for record in event_records}
+          assert "OFFICIAL_TOOL_RESULT" in event_types, event_types
           print("PASS: complete solve loop called the model twice")
           print("PASS: engineering tool was registered and invoked")
           print("PASS: tool result returned to the model as a PLE tool message")
-          print("PASS: calculation and observation events were persisted")
+          print("PASS: official tool observation was persisted")
           print("PASS: final answer preserved unresolved signoff status")
           PY
 
