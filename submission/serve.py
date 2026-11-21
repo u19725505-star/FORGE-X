@@ -4,7 +4,6 @@ import json
 import inspect
 import forge_x_runtime as _forge_x_runtime
 import forge_x_agent as _forge_x_agent
-import forge_x_agent as _forge_x_agent
 # Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -435,7 +434,7 @@ async def run_tool(*args, **kwargs):
 
         if callable(observer):
             try:
-                observed = observer(call, result)
+                observed = observer(call, {}, result)
 
                 if inspect.isawaitable(observed):
                     await observed
@@ -444,15 +443,13 @@ async def run_tool(*args, **kwargs):
                 # Observation failure must not fabricate success.
                 pass
 
-        return {
-            "role": "tool",
-            "tool_call_id": _forge_x_runtime.tool_call_id(call),
-            "content": json.dumps(
-                result,
-                ensure_ascii=False,
-                allow_nan=False,
-            ),
-        }
+        # The official PLE loop owns the tool-message envelope and
+        # appends this returned string as the tool message content.
+        return json.dumps(
+            result,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
 
     except Exception as exc:
 
@@ -463,12 +460,6 @@ async def run_tool(*args, **kwargs):
             "engineering_status": "UNRESOLVED",
         }
 
-        return {
-            "role": "tool",
-            "tool_call_id": _forge_x_runtime.tool_call_id(call),
-            "content": json.dumps(
-                error,
-                ensure_ascii=False,
-            ),
-        }
+        # Preserve the official loop's string-only tool result contract.
+        return json.dumps(error, ensure_ascii=False)
 
