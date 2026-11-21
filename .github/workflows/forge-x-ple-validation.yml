@@ -83,6 +83,45 @@ jobs:
           test -f submission/forge_x_agent.py
           python -m compileall -q submission
 
+      - name: Smoke-test FORGE-X local engineering tool integration
+        shell: bash
+        env:
+          MODEL_NAME: google-cloud/gemini-3.8-flash
+          PYTHONPATH: submission
+          FORGE_X_STATE_DIR: /tmp/forge-x-smoke-state
+        run: |
+          set -euo pipefail
+          uv run --project official-ple --with openai==3.26.1 --with websockets==15.0.1 python - <<'PY'
+          import asyncio
+          import json
+          from pathlib import Path
+          import serve
+
+          call = {
+              "name": "forge_x_calculate",
+              "arguments": json.dumps({
+                  "discipline": "mechanical",
+                  "method": "kinetic_energy",
+                  "inputs": {"mass": 2, "velocity": 3}
+              })
+          }
+          raw = asyncio.run(serve.run_tool(None, call))
+          assert isinstance(raw, str), f"Tool result must be text, got {type(raw).__name__}"
+          result = json.loads(raw)
+          assert result["result"] == 9.0, result
+          assert result["verification_status"] == "NUMERICALLY_CONSISTENT", result
+          assert result["engineering_status"] == "UNRESOLVED", result
+
+          events = Path("/tmp/forge-x-smoke-state/events.jsonl")
+          assert events.is_file(), "FORGE-X did not persist tool observation events"
+          event_text = events.read_text(encoding="utf-8")
+          assert "OFFICIAL_TOOL_RESULT" in event_text, "Tool observation was not recorded"
+          print("PASS: local tool returns the official PLE string content contract")
+          print("PASS: deterministic result and independent numerical check")
+          print("PASS: observation event persisted")
+          print("PASS: engineering signoff remains unresolved")
+          PY
+
       - name: Validate submission with official PLE kit
         shell: bash
         working-directory: official-ple
