@@ -45,3 +45,25 @@ The official-submission candidate and validation workflow will be added after th
 ## License
 
 The applicable license will be added after confirming the license requirements and provenance of the official starter files and project contributions.
+
+## Live engineering demonstration
+
+The first bounded demonstration challenge and its acceptance rubric are maintained at:
+
+- `submission/demo/structural_axial_member/task.md`
+- `submission/demo/structural_axial_member/acceptance_rubric.md`
+
+The trial checks a nominal axial-stress case and a sensitivity case. Its reference values are 200 MPa and 260 MPa respectively, against a supplied 250 MPa comparison limit. It explicitly requires a distinct independent derivation, a written report, and unresolved status for design items not supported by the supplied evidence.
+
+**Important:** this is an internal demonstration brief, not an official PLE benchmark task and not evidence that a live model run has occurred. GitHub Actions currently validates the submission, deterministic engineering methods, and an offline task-loop simulation. A real model-driven run must be performed through the PLE evaluation environment or another properly configured model endpoint.
+
+## Official live-evaluation path
+
+PLE's competition workflow uses the official kit to check the harness, run the 29 public development tasks, and generate evaluator-produced `artifacts/`. Entries are submitted through the PLE Kaggle competition. The evaluator supplies credentials for the declared Google-sponsored model; local runs of those models require a Google Cloud model-proxy setup.
+
+Do not hand-create or edit the official `artifacts/` directory. Generate it with the official PLE evaluation runner, then validate and commit it with the exact harness revision that produced it.
+
+Official guide: https://ple-bench.com/competition/guide
+
+Competition page: https://www.kaggle.com/competitions/physical-engineerings-last-exam
+
