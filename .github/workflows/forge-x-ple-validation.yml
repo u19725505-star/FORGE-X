@@ -124,6 +124,107 @@ jobs:
           print("PASS: engineering signoff remains unresolved")
           PY
 
+      - name: End-to-end offline FORGE-X task-loop test
+        shell: bash
+        env:
+          MODEL_NAME: google-cloud/gemini-3.8-flash
+          OPENAI_API_KEY: forge-x-ci-no-network-call
+          PYTHONPATH: submission
+          FORGE_X_STATE_DIR: /tmp/forge-x-loop-state
+        run: |
+          set -euo pipefail
+          uv run --project official-ple --with openai==3.26.1 --with websockets==15.0.1 python - <<'PY'
+          import asyncio
+          import json
+          from pathlib import Path
+          from types import SimpleNamespace
+          import serve
+
+          class FakeMessage:
+              def __init__(self, content=None, tool_calls=None):
+                  self.content = content
+                  self.tool_calls = tool_calls
+              def model_dump(self, exclude_none=True):
+                  data = {"role": "assistant", "content": self.content}
+                  if self.tool_calls is not None:
+                      data["tool_calls"] = self.tool_calls
+                  return {k: v for k, v in data.items() if v is not None}
+
+          class FakeSession:
+              workdir = "/tmp/forge-x-offline-task"
+              instruction = "Calculate the kinetic energy of a 2 kg object moving at 3 m/s."
+              final_message = None
+              def time_left(self):
+                  return None
+              async def log(self, message):
+                  pass
+              async def usage(self, *args):
+                  pass
+
+          calls = []
+          async def fake_create(**kwargs):
+              calls.append(kwargs)
+              if len(calls) == 1:
+                  return SimpleNamespace(
+                      usage=None,
+                      choices=[SimpleNamespace(
+                          message=FakeMessage(tool_calls=[{
+                              "id": "call_forge_x_1",
+                              "type": "function",
+                              "function": {
+                                  "name": "forge_x_calculate",
+                                  "arguments": json.dumps({
+                                      "discipline": "mechanical",
+                                      "method": "kinetic_energy",
+                                      "inputs": {"mass": 2, "velocity": 3}
+                                  })
+                              }
+                          }]),
+                          finish_reason="tool_calls"
+                      )]
+                  )
+
+              messages = kwargs["messages"]
+              tool_messages = [m for m in messages if m.get("role") == "tool"]
+              assert len(tool_messages) == 1, messages
+              tool_result = json.loads(tool_messages[0]["content"])
+              assert tool_result["result"] == 9.0, tool_result
+              assert tool_result["verification_status"] == "NUMERICALLY_CONSISTENT"
+              assert tool_result["engineering_status"] == "UNRESOLVED"
+              assert any(
+                  t.get("function", {}).get("name") == "forge_x_calculate"
+                  for t in kwargs["tools"]
+              ), "FORGE-X tool was not registered with the model"
+              return SimpleNamespace(
+                  usage=None,
+                  choices=[SimpleNamespace(
+                      message=FakeMessage(
+                          content="Kinetic energy is 9 J. Numerical verification passed; engineering signoff remains unresolved."
+                      ),
+                      finish_reason="stop"
+                  )]
+              )
+
+          serve.client = SimpleNamespace(
+              chat=SimpleNamespace(
+                  completions=SimpleNamespace(create=fake_create)
+              )
+          )
+          result = asyncio.run(serve.solve(FakeSession()))
+          assert "9 J" in result, result
+          assert len(calls) == 2, f"Expected tool turn and final turn, got {len(calls)}"
+          events = Path("/tmp/forge-x-loop-state/events.jsonl")
+          assert events.is_file(), "Task-loop evidence log was not written"
+          event_text = events.read_text(encoding="utf-8")
+          assert "OFFICIAL_TOOL_RESULT" in event_text
+          assert "ENGINEERING_CALCULATION" in event_text
+          print("PASS: complete solve loop called the model twice")
+          print("PASS: engineering tool was registered and invoked")
+          print("PASS: tool result returned to the model as a PLE tool message")
+          print("PASS: calculation and observation events were persisted")
+          print("PASS: final answer preserved unresolved signoff status")
+          PY
+
       - name: Validate submission with official PLE kit
         shell: bash
         working-directory: official-ple
