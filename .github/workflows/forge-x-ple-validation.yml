@@ -87,6 +87,8 @@ jobs:
         shell: bash
         env:
           MODEL_NAME: google-cloud/gemini-3.8-flash
+          # The smoke test exercises deterministic local tools only; no model request is made.
+          OPENAI_API_KEY: forge-x-ci-no-network-call
           PYTHONPATH: submission
           FORGE_X_STATE_DIR: /tmp/forge-x-smoke-state
         run: |
@@ -152,19 +154,20 @@ jobs:
         if: always()
         shell: bash
         run: |
-          {
-            echo "## FORGE-X PLE CI"
-            echo ""
-            echo "- Official PLE commit: `8320f0402fdca9f42476607f72bcfd5271cd50c9`"
-            echo "- Runner: `ubuntu-latest`"
-            echo "- Docker availability: checked"
-            echo "- Official kit submission validation: attempted"
-            echo "- Official kit build: attempted"
-            echo "- Full `kit check` model/smoke/MCP run: not claimed; requires configured model-proxy credentials"
-            echo "- Submission: `submission/`"
-            echo ""
-            echo "Passing validation/build does not establish hidden-task performance or leaderboard readiness."
-          } >> "$GITHUB_STEP_SUMMARY"
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ## FORGE-X PLE CI
+
+          - Official PLE commit: `8320f0402fdca9f42476607f72bcfd5271cd50c9`
+          - Runner: `ubuntu-latest`
+          - Docker availability: checked
+          - Local engineering-tool smoke test: attempted
+          - Official kit submission validation: attempted
+          - Official kit build: attempted
+          - Full model/smoke/MCP run: not claimed; requires configured model-proxy credentials
+          - Submission: `submission/`
+
+          Passing validation/build does not establish hidden-task performance or leaderboard readiness.
+          SUMMARY
 
       - name: Upload CI logs and submission
         if: always()
